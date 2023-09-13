@@ -46,25 +46,35 @@ with open("./README.md") as readme:
 
 
 setup(
-    name="<PYPI_NAME>",
+    name="ape-patchwallet",
     use_scm_version=True,
     setup_requires=["setuptools_scm"],
-    description="""<PYPI_NAME>: <SHORT_DESCRIPTION>""",
+    description="""ape-patchwallet: Plug-in for Patch Wallets""",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="ApeWorX Ltd.",
-    author_email="admin@apeworx.io",
-    url="https://github.com/ApeWorX/<REPO_NAME>",
+    author="Lang Research & Development Inc.",
+    author_email="team@langwallet.ai",
+    url="https://github.com/imrane/ape-patchwallet",
     include_package_data=True,
-    install_requires=[],
+    install_requires=[
+        "eth-ape",
+        "keyring",
+        "pydantic",
+        "requests"
+    ],
+    entry_points={
+        "ape_cli_subcommands": [
+            "ape_patchwallet=ape_patchwallet._cli:cli",
+        ],
+    },
     python_requires=">=3.8,<4",
     extras_require=extras_require,
-    py_modules=["<MODULE_NAME>"],
+    py_modules=["ape_patchwallet"],
     license="Apache-2.0",
     zip_safe=False,
     keywords="ethereum",
     packages=find_packages(exclude=["tests", "tests.*"]),
-    package_data={"<MODULE_NAME>": ["py.typed"]},
+    package_data={"ape_patchwallet": ["py.typed"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
