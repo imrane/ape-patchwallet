@@ -1,7 +1,8 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, validator
 from .constants import PATCHWALLET_SUPPORTED_PROVIDERS as PROVIDERS
 
+# Patch wallet models
 class TransactionData(BaseModel):
   chain: str
   to: List[str]
@@ -9,9 +10,11 @@ class TransactionData(BaseModel):
   data: List[str]
   delegate_call: bool = False
 
+# Patch wallet responses
 class SignMessageResponse(BaseModel):
   hash: str
   signature: str
+  type: str
 
 class SignTransactionResponse(BaseModel):
   txHash: str
@@ -36,6 +39,7 @@ class VerifyOTPResponse(BaseModel):
   user: UserData
   session: SessionData  
 
+# Internal Models
 class Provider(BaseModel):
   name: str
   type: str  

@@ -30,8 +30,9 @@ python3 setup.py install
 ### Export Variables
 You'll need to export the following environment variables. Pass will be used to encrypt secrets using keyring.
 ```bash
-export PATCHWALLET_CLIENT_ID=""
-export PATCHWALLET_CLIENT_SECRET=""
+# For custom providers...
+export PATCHWALLET_[PROVIDER]_CLIENT_ID=""
+export PATCHWALLET_[PROVIDER]_CLIENT_SECRET=""
 # Optional
 export PATCHWALLET_PASS=""
 # Refresh

@@ -1,11 +1,12 @@
 
 from ape.types import AddressType
+from typing import Union
 import requests
 import json
 import os
 
 # Local
-from .exceptions import Forbidden, MissingAuthToken
+from .exceptions import Forbidden, MissingAuthToken, InvalidProvider
 
 # Models
 from .models import SignMessageResponse, SignTransactionResponse, VerifyOTPResponse, SigninWithOTPResponse, TransactionData, User
@@ -50,10 +51,17 @@ class PatchClient:
 
   def get_bearer_token(self, force: bool = False) -> str:
 
+    # Check if provider is supported using self.user.provider.name and PROVIDERS array
+    if self.user.provider.name not in [provider['name'] for provider in PROVIDERS]:
+      raise InvalidProvider(self.user.provider.name)
+    
+    #capitalize provider name
+    provider_name = self.user.provider.name.upper()
+
     # Get credentials from environment variables
     data = {
-        "client_id": os.environ.get("PATCHWALLET_CLIENT_ID"),
-        "client_secret": os.environ.get("PATCHWALLET_CLIENT_SECRET")
+        "client_id": os.environ.get(f"PATCHWALLET_{provider_name}_CLIENT_ID"),
+        "client_secret": os.environ.get(f"PATCHWALLET_{provider_name}_CLIENT_SECRET")
     }
 
     # Send request to Patch Wallet API to authenticate and get the bearer token
@@ -124,24 +132,32 @@ class PatchClient:
     else:
       raise ValueError("API error")
 
-  def sign_message(self, text: str) -> SignMessageResponse:
+  def sign_message(self, text: Union[str, dict], bearer_token: str) -> SignMessageResponse:
+    # Add header content type
+    headers = {"Content-Type": "application/json"}
 
-    # Prepare headers
-    headers = {
-      "Authorization": f"Bearer {self.bearer_token}",
-      "Content-Type": "application/json"
-    }
+    # Check for bearer token
+    if bearer_token is None:
+      raise MissingAuthToken("bearer token", self.user.provider.name)
+    else:
+      headers.update({"Authorization": f"Bearer {bearer_token}"})
 
     # Prepare message data
     data = {
-      "userId": self.user.id,
-      "chain": self.chain_id,
-      "data": text
+      "userId": self.user.id
     }
+
+    # Add message to data
+    if isinstance(text, dict):
+      data.update({"typedData": text})
+    elif text.startswith('0x'):
+      data.update({"hash": text})      
+    elif isinstance(text, str):
+      data.update({"string": text})
 
     # Send request to Kernel API
     response = requests.post(
-      f"{URLS.get('kernel')}/sign-message", 
+      f"{URLS.get('kernel')}/sign", 
       headers=headers, 
       data=json.dumps(data)
     )
@@ -152,8 +168,10 @@ class PatchClient:
       # Parse the response to the Pydantic model
       signature_response = SignMessageResponse(**result)
       return signature_response
+    elif response.status_code == 403:
+      raise Forbidden("You will need to reauthenticate the provider")
     else:
-      raise Exception("Failed to sign message")
+      response.raise_for_status()
 
   def tx(self, txn: TransactionData, bearer_token: str, jwt: str) -> SignTransactionResponse:
     headers = {}

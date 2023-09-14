@@ -1,6 +1,6 @@
 import click
 from datetime import datetime
-from ape import accounts, networks
+from ape import accounts, networks, convert
 from ape_tokens import tokens
 from ape.cli import (
   NetworkBoundCommand, 
@@ -9,8 +9,6 @@ from ape.cli import (
   existing_alias_argument,
   network_option
 )
-import keyring
-import os
 
 # Import local modules
 from .accounts import PatchWalletAccount
@@ -71,8 +69,6 @@ def auth(cli_ctx, alias, force):
       otp_verification_response = account.auth.verifyOTP(otp_code)
       # Log session time left and store jwt token in keyring
       expiry_time = datetime.fromtimestamp(int(otp_verification_response.session.expires_at)) - datetime.now()
-      # Store the password in the keyring
-      keyring.set_password(alias, os.environ.get("PATCHWALLET_PASS"), otp_verification_response.session.access_token)
       # Log success message
       cli_ctx.logger.success(f"Authentication for {alias} successful, token expires {expiry_time} from now")
     except Exception as e:
@@ -80,13 +76,10 @@ def auth(cli_ctx, alias, force):
   else:
     try:
       auth_app_response = account.auth.app(force)
-      # Store the password in the keyring
-      keyring.set_password(account.user.provider.name, os.environ.get("PATCHWALLET_PASS"), auth_app_response)
       cli_ctx.logger.success("App authentication successful.")
     except Exception as e:
       cli_ctx.logger.error(f"Error during app authentication: {e}")
   
-
 @cli.command(cls=NetworkBoundCommand, short_help="Remove a locally tracked Patch Wallet")
 @ape_cli_context()
 @existing_alias_argument(account_type=PatchWalletAccount)
@@ -107,14 +100,15 @@ def transfer(cli_ctx, alias):
     """Transfer funds from a Patch Wallet account"""
     container = accounts.containers.get("patchwallet")
     account = container.load_account(alias=alias)
-    # Get the bearer token from the keyring
-    bearer_token = keyring.get_password(account.user.provider.name, os.environ.get("PATCHWALLET_PASS"))
     
     address = "0x9C549499f1f631a264a80F82dd3db608b211E9c6"
     # Get the token address
     usdc = tokens["USDC"]
+    amount = convert("0.01 USDC", int)
     print(usdc.address)
-    usdc.transfer(address, 100000000000000, bearer_token=bearer_token)
+    print(account.address)
+    print(amount)
+    usdc.transfer(address, amount, sender=account)
 
     #account.transfer(address, 100000000000000, bearer_token=bearer_token)
     

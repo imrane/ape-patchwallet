@@ -1,6 +1,7 @@
 import json
 import os
 import getpass
+import keyring
 
 # Ape
 from ape.api import AccountAPI, AccountContainerAPI, TransactionAPI, ReceiptAPI
@@ -20,6 +21,7 @@ from .constants import PATCHWALLET_SUPPORTED_CHAINS, PATCHWALLET_SUPPORTED_PROVI
 
 # Reorganize CHAINS by id
 CHAINS = {chain['id']: chain for chain in PATCHWALLET_SUPPORTED_CHAINS.values()}
+KEYRING_PASS = os.environ.get("PATCHWALLET_PASS")
 
 class AccountContainer(AccountContainerAPI):
   @property
@@ -58,14 +60,30 @@ class Authenticate:
   def __init__(self, client):
     self._client = client
 
+  @property
+  def bearer_token(self) -> str:
+    return keyring.get_password(self._client.user.provider.name, KEYRING_PASS)
+
+  @property
+  def jwt(self) -> str:
+    return keyring.get_password(self._client.user.id, KEYRING_PASS)
+
   def user(self) -> SigninWithOTPResponse:
     return self._client.user_auth()
 
   def verifyOTP(self, code: int) -> VerifyOTPResponse:
-    return self._client.verify_otp(code)
+    response = self._client.verify_otp(code)
+    if response.session.access_token:
+      print('Saving jwt on keyring...')
+      keyring.set_password(self._client.user.id, KEYRING_PASS, response.session.access_token)
+    return response
 
   def app(self, force: bool = False) -> str:
-    return self._client.get_bearer_token(force)
+    response = self._client.get_bearer_token(force)
+    if response:
+      print('Saving bearer_token on keyring...')
+      keyring.set_password(self._client.user.provider.name, KEYRING_PASS, response)
+    return response
 
 class PatchWalletAccount(AccountAPI):
   account_file_path: Path
@@ -100,8 +118,20 @@ class PatchWalletAccount(AccountAPI):
     # return provider type based on provider name
     return [provider['type'] for provider in PROVIDERS if provider['name'] == self.user.provider][0]
     
-  def sign_message(self, msg: SignableMessage) -> Optional[MessageSignature]:
-    pass
+  def sign_message(self, msg: SignableMessage, **kwargs) -> Optional[MessageSignature]:
+
+    try:
+      response = self._client.sign_message(msg.body, self.auth.bearer_token)
+      # Log the transaction hash
+      logger.success(f"Successful with signature: {response.signature}")
+      # Return the ReceiptAPI
+      return response
+    except Forbidden as e:
+      # Raise error
+      raise ValueError("You need to reauthenticate the provider")
+    except Exception as e:
+      # Raise error
+      raise ValueError("API error")
     
   def sign_transaction(self, txn: TransactionAPI) -> Optional[TransactionAPI]:
     return super().sign_transaction(txn)
@@ -115,11 +145,11 @@ class PatchWalletAccount(AccountAPI):
       raise ValueError(f"Chain with id {txn.chain_id} is not supported.")
     
     # Get the bearer token and jwt
-    bearer_token = kwargs.get('bearer_token')
-    jwt = kwargs.get('jwt')
+    bearer_token = self.auth.bearer_token
+    jwt = self.auth.jwt
 
     # Convert the TransactionAPI to the TransactionData model
-    
+
     txn_data = TransactionData(
       chain=CHAINS[txn.chain_id]['name'],
       to=[txn.receiver],
@@ -136,9 +166,9 @@ class PatchWalletAccount(AccountAPI):
       # Return the ReceiptAPI
       return {"txn_hash": response.txHash, "status": 1, "transaction": txn}
     except Forbidden as e:
-      print(e)
+      # Raise error 
       raise ValueError("You need to reauthenticate the provider")
     except Exception as e:
-      print(e)
+      # Raise error
       raise ValueError("API error")
    
